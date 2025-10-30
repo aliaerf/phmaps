@@ -1,25 +1,16 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Dynamic Heatmap with Points</title>
+    <title>Dynamic Map</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/leaflet.heat@latest/dist/leaflet-heat.js"></script>
     
     <style>
         #map { height: 100vh; width: 100%; }
         body { padding: 0; margin: 0; }
-        /* Style for the circle markers */
-        .my-circle-marker {
-            background-color: #0000FF; /* Blue fill */
-            border: 2px solid #FFFFFF; /* White border */
-            border-radius: 50%; /* Makes it a circle */
-            opacity: 0.8; /* Slightly transparent */
-            pointer-events: none; /* Allows clicks to pass through to map */
-        }
     </style>
 </head>
 <body>
@@ -27,16 +18,16 @@
 <div id="map"></div>
 
 <script>
-    // 4. Create a default location (just lat/lon)
+    // 4. Create a default location in case no parameters are passed
     var defaultLocations = [
-        [51.505, -0.09]
+        [51.505, -0.09, "Default Location (London)"]
     ];
 
     // 5. Get the URL parameters
     const urlParams = new URLSearchParams(window.location.search);
-    const locationsParam = urlParams.get('locations'); // e.g., "lat,lon|lat,lon"
+    const locationsParam = urlParams.get('locations'); // e.g., "lat,lon,title|lat,lon,title"
     
-    var locations = []; // This will be [[lat, lon], [lat, lon], ...]
+    var locations = [];
 
     // 6. Parse the 'locations' parameter string
     if (locationsParam) {
@@ -48,12 +39,16 @@
                 
                 const lat = parseFloat(parts[0]);
                 const lon = parseFloat(parts[1]);
+                
+                // Join the rest of the parts for the title, in case the title itself had a comma
+                // The URL's "Eiffel%20Tower" is automatically decoded to "Eiffel Tower" here
+                const title = parts.slice(2).join(',') || `Location (${lat.toFixed(4)}, ${lon.toFixed(4)})`;
 
-                if (isNaN(lat) || isNaN(lon)) return null;
+                if (isNaN(lat) || isNaN(lon)) return null; // Skip bad data
 
-                return [lat, lon];
+                return [lat, lon, title];
 
-            }).filter(loc => loc !== null);
+            }).filter(loc => loc !== null); // Filter out any bad entries
 
             if (locations.length === 0) {
                 locations = defaultLocations;
@@ -61,9 +56,10 @@
 
         } catch (e) {
             console.error("Error parsing locations:", e);
-            locations = defaultLocations;
+            locations = defaultLocations; // Fallback to default on error
         }
     } else {
+        // No 'locations' parameter found, use the default
         locations = defaultLocations;
     }
 
@@ -76,46 +72,55 @@
         attribution: '© <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
     }).addTo(map);
 
-    // 9. Create an array of [lat, lon, intensity] for the heatmap
-    // Using a higher intensity (e.g., 2.0) will also make the heatmap darker
-    const heatPoints = locations.map(loc => [loc[0], loc[1], 2.0]); 
+    // --- MODIFIED SECTION START ---
 
-    // 10. Add the heatmap layer and zoom to fit the points
-    if (heatPoints.length > 0) {
+    // 9. Loop through the locations and add markers
+    var markers = [];
+    
+    // Define the base URL for the redirect
+    var baseUrl = "https://ph-pov.eu-3.celonis.cloud/package-manager/ui/studio/ui/spaces/17861590-4c7f-45b3-b6e7-91d480bbaa96/packages/b9067f27-7266-44c0-b11c-a1d1d240a113/nodes/2c5115be-c441-4517-ad34-a3b76742cfec?filters=";
+
+    for (var i = 0; i < locations.length; i++) {
         
-        L.heatLayer(heatPoints, {
-            radius: 25,       
-            blur: 10,         
-            minOpacity: 0.5,  // Increased further for more darkness
-            max: 1.0,         // Max intensity value. Values above this are clamped.
-            gradient: {0.0: 'blue', 0.5: 'lime', 1.0: 'red'}, // Optional: custom colors
-            maxZoom: 18
-        }).addTo(map);
-
-        // --- NEW: Add individual circle markers for each coordinate ---
-        var markerGroup = L.featureGroup();
-        for (var i = 0; i < locations.length; i++) {
+        // We use an IIFE (Immediately Invoked Function Expression)
+        // to make sure each click event gets the correct 'title'
+        (function() {
             var lat = locations[i][0];
             var lon = locations[i][1];
+            var title = locations[i][2]; // e.g., "Eiffel Tower"
             
-            L.circleMarker([lat, lon], {
-                radius: 6,         // Size of the circle
-                fillColor: "#0000FF", // Blue fill
-                color: "#FFFFFF",  // White border
-                weight: 2,         // Border thickness
-                opacity: 1,        // Fully opaque border
-                fillOpacity: 0.7   // Slightly transparent fill
-            })
-            .bindPopup(`Lat: ${lat.toFixed(4)}, Lon: ${lon.toFixed(4)}`) // Optional popup
-            .addTo(markerGroup);
-        }
-        markerGroup.addTo(map);
-        // ----------------------------------------------------------------
+            var marker = L.marker([lat, lon]).addTo(map);
 
-        // 11. Automatically zoom the map to fit all points (now including circle markers)
-        // We'll use the 'markerGroup' for the bounds since it contains all visual elements
-        map.fitBounds(markerGroup.getBounds().pad(0.5)); 
+            // Requirement 1: Show title on HOVER
+            marker.bindTooltip(title);
+
+            // Requirement 2: Handle the CLICK action
+            
+            // 1. Create the filter string with the dynamic title
+            var filterString = `FILTER "o_custom_Vorgang"."ID" IN ('${title}');`;
+            
+            // 2. Base64 encode the filter string
+            var encodedFilter = btoa(filterString);
+            
+            // 3. Create the final URL
+            var finalUrl = baseUrl + encodedFilter;
+            
+            // 4. Add the click listener to open the new URL
+            marker.on('click', function() {
+                window.open(finalUrl, '_blank'); // Opens in a new tab
+            });
+            
+            markers.push(marker); // Add to a list for later
+        })(); // End of IIFE
     }
+
+    // 10. Automatically zoom the map to fit all markers
+    if (markers.length > 0) {
+        var group = new L.featureGroup(markers);
+        map.fitBounds(group.getBounds().pad(0.5)); // .pad(0.5) adds padding
+    }
+
+    // --- MODIFIED SECTION END ---
 
 </script>
 
