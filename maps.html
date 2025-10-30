@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Dynamic Heatmap</title>
+    <title>Dynamic Heatmap with Points</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
@@ -12,6 +12,14 @@
     <style>
         #map { height: 100vh; width: 100%; }
         body { padding: 0; margin: 0; }
+        /* Style for the circle markers */
+        .my-circle-marker {
+            background-color: #0000FF; /* Blue fill */
+            border: 2px solid #FFFFFF; /* White border */
+            border-radius: 50%; /* Makes it a circle */
+            opacity: 0.8; /* Slightly transparent */
+            pointer-events: none; /* Allows clicks to pass through to map */
+        }
     </style>
 </head>
 <body>
@@ -69,22 +77,44 @@
     }).addTo(map);
 
     // 9. Create an array of [lat, lon, intensity] for the heatmap
-    const heatPoints = locations.map(loc => [loc[0], loc[1], 1.0]);
+    // Using a higher intensity (e.g., 2.0) will also make the heatmap darker
+    const heatPoints = locations.map(loc => [loc[0], loc[1], 2.0]); 
 
     // 10. Add the heatmap layer and zoom to fit the points
     if (heatPoints.length > 0) {
         
         L.heatLayer(heatPoints, {
-            radius: 25,       // You can increase this (e.g., 30) to make the spots bigger
-            blur: 10,         // Reduced blur to make it "clearer" and sharper
-            minOpacity: 0.3,  // Increased opacity to make it "darker"
+            radius: 25,       
+            blur: 10,         
+            minOpacity: 0.5,  // Increased further for more darkness
+            max: 1.0,         // Max intensity value. Values above this are clamped.
+            gradient: {0.0: 'blue', 0.5: 'lime', 1.0: 'red'}, // Optional: custom colors
             maxZoom: 18
         }).addTo(map);
 
-        // 11. Automatically zoom the map to fit all points
-        // (This line uses 'locations' for stable zooming)
-        var bounds = L.latLngBounds(locations); 
-        map.fitBounds(bounds.pad(0.5));
+        // --- NEW: Add individual circle markers for each coordinate ---
+        var markerGroup = L.featureGroup();
+        for (var i = 0; i < locations.length; i++) {
+            var lat = locations[i][0];
+            var lon = locations[i][1];
+            
+            L.circleMarker([lat, lon], {
+                radius: 6,         // Size of the circle
+                fillColor: "#0000FF", // Blue fill
+                color: "#FFFFFF",  // White border
+                weight: 2,         // Border thickness
+                opacity: 1,        // Fully opaque border
+                fillOpacity: 0.7   // Slightly transparent fill
+            })
+            .bindPopup(`Lat: ${lat.toFixed(4)}, Lon: ${lon.toFixed(4)}`) // Optional popup
+            .addTo(markerGroup);
+        }
+        markerGroup.addTo(map);
+        // ----------------------------------------------------------------
+
+        // 11. Automatically zoom the map to fit all points (now including circle markers)
+        // We'll use the 'markerGroup' for the bounds since it contains all visual elements
+        map.fitBounds(markerGroup.getBounds().pad(0.5)); 
     }
 
 </script>
