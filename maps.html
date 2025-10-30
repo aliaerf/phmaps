@@ -1,12 +1,14 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Dynamic Map</title>
+    <title>Dynamic Heatmap</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script src="https://unpkg.com/leaflet.heat@latest/dist/leaflet-heat.js"></script>
     
     <style>
         #map { height: 100vh; width: 100%; }
@@ -72,22 +74,24 @@
         attribution: '© <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
     }).addTo(map);
 
-    // 9. Loop through the locations and add markers
-    var markers = [];
-    for (var i = 0; i < locations.length; i++) {
-        var lat = locations[i][0];
-        var lon = locations[i][1];
-        var popupText = locations[i][2];
-        
-        var marker = L.marker([lat, lon]).addTo(map);
-        marker.bindPopup(popupText); // Add a popup
-        markers.push(marker); // Add to a list for later
-    }
+    // 9. Create an array of just [lat, lon] for the heatmap
+    // The heatmap doesn't need the titles, just the coordinates.
+    const heatPoints = locations.map(loc => [loc[0], loc[1]]);
 
-    // 10. Automatically zoom the map to fit all markers
-    if (markers.length > 0) {
-        var group = new L.featureGroup(markers);
-        map.fitBounds(group.getBounds().pad(0.5)); // .pad(0.5) adds padding
+    // 10. Add the heatmap layer and zoom to fit the points
+    if (heatPoints.length > 0) {
+        
+        // Add the heatmap layer
+        L.heatLayer(heatPoints, {
+            radius: 25, // Adjust the "size" of each point
+            blur: 15,   // Adjust the "fuzziness"
+            maxZoom: 18
+        }).addTo(map);
+
+        // 11. Automatically zoom the map to fit all points
+        // We create a bounds object from our points
+        var bounds = L.latLngBounds(heatPoints);
+        map.fitBounds(bounds.pad(0.5));
     }
 
 </script>
