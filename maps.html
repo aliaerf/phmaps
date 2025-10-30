@@ -32,7 +32,7 @@
     // This will be [[lat, lon, id], [lat, lon, id], ...]
     var locations = []; 
 
-    // 6. Parse the 'locations' parameter string (MODIFIED)
+    // 6. Parse the 'locations' parameter string
     if (locationsParam) {
         try {
             const locationsArray = locationsParam.split('|');
@@ -44,7 +44,6 @@
                 const lon = parseFloat(parts[1]);
                 
                 // Get the ID (e.g., "V-aa23...").
-                // parts.slice(2).join(',') handles cases where the ID might have a comma
                 const id = parts.slice(2).join(',') || `Location_(${lat.toFixed(4)})`;
 
                 if (isNaN(lat) || isNaN(lon)) return null;
@@ -76,10 +75,9 @@
     }).addTo(map);
 
     // 9. Create an array of [lat, lon, intensity] for the heatmap
-    // This correctly takes just the first two elements (lat, lon)
     const heatPoints = locations.map(loc => [loc[0], loc[1], 1.0]);
 
-    // 10. Add heatmap, add circle markers, and add interactions (MODIFIED)
+    // 10. Add heatmap, add circle markers, and add interactions
     if (heatPoints.length > 0) {
         
         // --- Add the heatmap layer ---
@@ -96,7 +94,8 @@
         // Define the base URL for the redirect
         var baseUrl = "https://ph-pov.eu-3.celonis.cloud/package-manager/ui/studio/ui/spaces/17861590-4c7f-45b3-b6e7-91d480bbaa96/packages/b9067f27-7266-44c0-b11c-a1d1d240a113/nodes/2c5115be-c441-4517-ad34-a3b76742cfec?filters=";
 
-        for (var i = s0; i < locations.length; i++) {
+        // *** THIS IS THE FIX: var i = 0 ***
+        for (var i = 0; i < locations.length; i++) {
             
             // Use an IIFE to correctly scope variables for click/hover
             (function() {
@@ -105,13 +104,8 @@
                 var id = locations[i][2]; // This is the ID, e.g., "V-aa23..."
                 
                 // --- Create the link for the click action ---
-                // 1. Create the filter string
                 var filterString = `FILTER "o_custom_Vorgang"."ID" IN ('${id}');`;
-                
-                // 2. Base64 encode it
                 var encodedFilter = btoa(filterString);
-                
-                // 3. Create the final URL
                 var finalUrl = baseUrl + encodedFilter;
 
                 // --- Create the circle marker ---
@@ -140,7 +134,6 @@
         // ----------------------------------------------------------------
 
         // 11. Automatically zoom the map to fit all points
-        // We now use markerGroup to make sure all points are visible
         map.fitBounds(markerGroup.getBounds().pad(0.5));
     }
 
