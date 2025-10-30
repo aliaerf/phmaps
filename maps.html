@@ -96,7 +96,7 @@
         // Define the base URL for the redirect
         var baseUrl = "https://ph-pov.eu-3.celonis.cloud/package-manager/ui/studio/ui/spaces/17861590-4c7f-45b3-b6e7-91d480bbaa96/packages/b9067f27-7266-44c0-b11c-a1d1d240a113/nodes/2c5115be-c441-4517-ad34-a3b76742cfec?filters=";
 
-        for (var i = 0; i < locations.length; i++) {
+        for (var i = s0; i < locations.length; i++) {
             
             // Use an IIFE to correctly scope variables for click/hover
             (function() {
@@ -117,8 +117,8 @@
                 // --- Create the circle marker ---
                 var marker = L.circleMarker([lat, lon], {
                     radius: 6,
-                    fillColor: "#0000FF",
-                    color: "#FFFFFF",
+                    fillColor: "#0000FF", // Blue fill
+                    color: "#FFFFFF",     // White border
                     weight: 2,
                     opacity: 1,
                     fillOpacity: 0.7
