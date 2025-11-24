@@ -19,7 +19,7 @@
 <div id="map"></div>
 
 <script>
-    // 1. Initialize Map (Empty start)
+    // 1. Initialize Map (Start with a default view)
     var map = L.map('map').setView([51.505, -0.09], 2);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -27,59 +27,61 @@
         attribution: '© <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
     }).addTo(map);
 
-    // 2. Create Layer Groups (So we can clear them on updates)
+    // 2. Create Layer Groups (Global variables so we can clear them later)
     var markerGroup = L.featureGroup().addTo(map);
     var heatLayer = null; 
 
     // 3. Main Function to Parse Hash and Render
     function renderMap() {
-        // Clear existing layers
+        // --- Reset Layers ---
         markerGroup.clearLayers();
         if (heatLayer) {
             map.removeLayer(heatLayer);
         }
 
-        // --- Get Data from Hash (#) instead of Query (?) ---
-        // We remove the first character (which is the '#')
+        // --- Get Data from Hash (#) ---
+        // remove the '#' character at the start
         var hash = window.location.hash.substring(1); 
         var params = new URLSearchParams(hash);
         var locationsParam = params.get('locations');
 
         var locations = [];
-        var defaultLocations = [[51.505, -0.09, "Default_ID"]];
 
         if (locationsParam) {
             try {
-                // Decode URI component in case the browser encoded the pipe symbols
+                // Decode URI component (turns %7C back into | and %2C into ,)
                 locationsParam = decodeURIComponent(locationsParam);
                 
-                const locationsArray = locationsParam.split('|');
+                // Split by pipe
+                var rawPoints = locationsParam.split('|');
                 
-                locations = locationsArray.map(locString => {
+                locations = rawPoints.map(locString => {
+                    // --- FIX 1: Handle Trailing Pipes ---
+                    // If the string is empty or just whitespace, ignore it
+                    if (!locString || locString.trim() === "") return null;
+
                     const parts = locString.split(',');
+                    // We need at least Lat and Lon
                     if (parts.length < 2) return null;
 
                     const lat = parseFloat(parts[0]);
                     const lon = parseFloat(parts[1]);
                     
-                    // Get the ID
+                    // Get the ID (join back the rest in case ID contains commas)
                     const id = parts.slice(2).join(',') || `Location_(${lat.toFixed(4)})`;
 
                     if (isNaN(lat) || isNaN(lon)) return null;
                     return [lat, lon, id]; 
-                }).filter(loc => loc !== null);
+
+                }).filter(loc => loc !== null); // Remove the nulls (bad points)
 
             } catch (e) {
                 console.error("Error parsing locations:", e);
             }
         }
 
-        // Fallback if empty
-        if (locations.length === 0) {
-            // Optional: Uncomment below to show default points if no data
-            // locations = defaultLocations; 
-            return; // Stop if no data to render
-        }
+        // Stop if no valid locations found
+        if (locations.length === 0) return;
 
         // --- Render Heatmap ---
         const heatPoints = locations.map(loc => [loc[0], loc[1], 1.0]);
@@ -99,12 +101,12 @@
             var lon = loc[1];
             var id = loc[2];
 
-            // Create Link
+            // Create Filter Link
             var filterString = `FILTER "o_custom_Vorgang"."ID" IN ('${id}');`;
             var encodedFilter = btoa(filterString);
             var finalUrl = baseUrl + encodedFilter;
 
-            // Create Marker
+            // Create Circle Marker
             var marker = L.circleMarker([lat, lon], {
                 radius: 6,
                 fillColor: "#0000FF",
@@ -123,16 +125,20 @@
             marker.addTo(markerGroup);
         });
 
-        // --- Fit Bounds ---
-        if (locations.length > 0) {
+        // --- FIX 2: Intelligent Zoom ---
+        if (locations.length === 1) {
+            // If Single Point: Set specific zoom level (14 is street/neighborhood view)
+            map.setView([locations[0][0], locations[0][1]], 14);
+        } else {
+            // If Multiple Points: Auto-fit to bounds
             map.fitBounds(markerGroup.getBounds().pad(0.1));
         }
     }
 
-    // 4. Initialize
+    // 4. Run immediately on load
     renderMap();
 
-    // 5. Listen for changes (e.g. if Celonis updates the URL hash)
+    // 5. Listen for URL changes (Celonis updates)
     window.addEventListener("hashchange", renderMap);
 
 </script>
