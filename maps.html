@@ -19,123 +19,121 @@
 <div id="map"></div>
 
 <script>
-    // 4. Create a default location (now with an ID)
-    var defaultLocations = [
-        [51.505, -0.09, "Default_ID"]
-    ];
+    // 1. Initialize Map (Empty start)
+    var map = L.map('map').setView([51.505, -0.09], 2);
 
-    // 5. Get the URL parameters
-    const urlParams = new URLSearchParams(window.location.search);
-    // e.g., "lat,lon,id|lat,lon,id"
-    const locationsParam = urlParams.get('locations'); 
-    
-    // This will be [[lat, lon, id], [lat, lon, id], ...]
-    var locations = []; 
-
-    // 6. Parse the 'locations' parameter string
-    if (locationsParam) {
-        try {
-            const locationsArray = locationsParam.split('|');
-            
-            locations = locationsArray.map(locString => {
-                const parts = locString.split(',');
-                
-                const lat = parseFloat(parts[0]);
-                const lon = parseFloat(parts[1]);
-                
-                // Get the ID (e.g., "V-aa23...").
-                const id = parts.slice(2).join(',') || `Location_(${lat.toFixed(4)})`;
-
-                if (isNaN(lat) || isNaN(lon)) return null;
-
-                // Return [lat, lon, id]
-                return [lat, lon, id]; 
-
-            }).filter(loc => loc !== null);
-
-            if (locations.length === 0) {
-                locations = defaultLocations;
-            }
-
-        } catch (e) {
-            console.error("Error parsing locations:", e);
-            locations = defaultLocations;
-        }
-    } else {
-        locations = defaultLocations;
-    }
-
-    // 7. Initialize the map
-    var map = L.map('map').setView([locations[0][0], locations[0][1]], 10);
-
-    // 8. Add the OpenStreetMap tile layer
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
         attribution: '© <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
     }).addTo(map);
 
-    // 9. Create an array of [lat, lon, intensity] for the heatmap
-    const heatPoints = locations.map(loc => [loc[0], loc[1], 1.0]);
+    // 2. Create Layer Groups (So we can clear them on updates)
+    var markerGroup = L.featureGroup().addTo(map);
+    var heatLayer = null; 
 
-    // 10. Add heatmap, add circle markers, and add interactions
-    if (heatPoints.length > 0) {
+    // 3. Main Function to Parse Hash and Render
+    function renderMap() {
+        // Clear existing layers
+        markerGroup.clearLayers();
+        if (heatLayer) {
+            map.removeLayer(heatLayer);
+        }
+
+        // --- Get Data from Hash (#) instead of Query (?) ---
+        // We remove the first character (which is the '#')
+        var hash = window.location.hash.substring(1); 
+        var params = new URLSearchParams(hash);
+        var locationsParam = params.get('locations');
+
+        var locations = [];
+        var defaultLocations = [[51.505, -0.09, "Default_ID"]];
+
+        if (locationsParam) {
+            try {
+                // Decode URI component in case the browser encoded the pipe symbols
+                locationsParam = decodeURIComponent(locationsParam);
+                
+                const locationsArray = locationsParam.split('|');
+                
+                locations = locationsArray.map(locString => {
+                    const parts = locString.split(',');
+                    if (parts.length < 2) return null;
+
+                    const lat = parseFloat(parts[0]);
+                    const lon = parseFloat(parts[1]);
+                    
+                    // Get the ID
+                    const id = parts.slice(2).join(',') || `Location_(${lat.toFixed(4)})`;
+
+                    if (isNaN(lat) || isNaN(lon)) return null;
+                    return [lat, lon, id]; 
+                }).filter(loc => loc !== null);
+
+            } catch (e) {
+                console.error("Error parsing locations:", e);
+            }
+        }
+
+        // Fallback if empty
+        if (locations.length === 0) {
+            // Optional: Uncomment below to show default points if no data
+            // locations = defaultLocations; 
+            return; // Stop if no data to render
+        }
+
+        // --- Render Heatmap ---
+        const heatPoints = locations.map(loc => [loc[0], loc[1], 1.0]);
         
-        // --- Add the heatmap layer ---
-        L.heatLayer(heatPoints, {
+        heatLayer = L.heatLayer(heatPoints, {
             radius: 25,
             blur: 10,
             minOpacity: 0.3,
             maxZoom: 18
         }).addTo(map);
 
-        // --- Add circle markers & interactions ---
-        var markerGroup = L.featureGroup();
-        
-        // Define the base URL for the redirect
+        // --- Render Markers & Interactions ---
         var baseUrl = "https://ph-pov.eu-3.celonis.cloud/package-manager/ui/studio/ui/spaces/17861590-4c7f-45b3-b6e7-91d480bbaa96/packages/b9067f27-7266-44c0-b11c-a1d1d240a113/nodes/2c5115be-c441-4517-ad34-a3b76742cfec?filters=";
 
-        // *** THIS IS THE FIX: var i = 0 ***
-        for (var i = 0; i < locations.length; i++) {
+        locations.forEach(function(loc) {
+            var lat = loc[0];
+            var lon = loc[1];
+            var id = loc[2];
+
+            // Create Link
+            var filterString = `FILTER "o_custom_Vorgang"."ID" IN ('${id}');`;
+            var encodedFilter = btoa(filterString);
+            var finalUrl = baseUrl + encodedFilter;
+
+            // Create Marker
+            var marker = L.circleMarker([lat, lon], {
+                radius: 6,
+                fillColor: "#0000FF",
+                color: "#FFFFFF",
+                weight: 2,
+                opacity: 1,
+                fillOpacity: 0.7
+            });
+
+            marker.bindTooltip(id);
             
-            // Use an IIFE to correctly scope variables for click/hover
-            (function() {
-                var lat = locations[i][0];
-                var lon = locations[i][1];
-                var id = locations[i][2]; // This is the ID, e.g., "V-aa23..."
-                
-                // --- Create the link for the click action ---
-                var filterString = `FILTER "o_custom_Vorgang"."ID" IN ('${id}');`;
-                var encodedFilter = btoa(filterString);
-                var finalUrl = baseUrl + encodedFilter;
+            marker.on('click', function() {
+                window.open(finalUrl, '_blank');
+            });
+            
+            marker.addTo(markerGroup);
+        });
 
-                // --- Create the circle marker ---
-                var marker = L.circleMarker([lat, lon], {
-                    radius: 6,
-                    fillColor: "#0000FF", // Blue fill
-                    color: "#FFFFFF",     // White border
-                    weight: 2,
-                    opacity: 1,
-                    fillOpacity: 0.7
-                });
-
-                // Requirement 1: Show ID on HOVER
-                marker.bindTooltip(id);
-
-                // Requirement 2: Open link on CLICK
-                marker.on('click', function() {
-                    window.open(finalUrl, '_blank');
-                });
-                
-                marker.addTo(markerGroup);
-
-            })(); // End of IIFE
+        // --- Fit Bounds ---
+        if (locations.length > 0) {
+            map.fitBounds(markerGroup.getBounds().pad(0.1));
         }
-        markerGroup.addTo(map);
-        // ----------------------------------------------------------------
-
-        // 11. Automatically zoom the map to fit all points
-        map.fitBounds(markerGroup.getBounds().pad(0.5));
     }
+
+    // 4. Initialize
+    renderMap();
+
+    // 5. Listen for changes (e.g. if Celonis updates the URL hash)
+    window.addEventListener("hashchange", renderMap);
 
 </script>
 
