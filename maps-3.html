@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Dynamic Heatmap with Points</title>
+    <title>Map with Legend and Tooltips</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
@@ -11,11 +11,26 @@
     
     <style>
         #map { height: 100vh; width: 100%; }
-        body { padding: 0; margin: 0; }
+        body { padding: 0; margin: 0; font-family: sans-serif; }
 
-        /* Style to make non-clickable points show a normal arrow cursor instead of a hand */
-        .non-clickable-cursor {
-            cursor: default !important;
+        /* Legend Styling */
+        .legend {
+            padding: 10px;
+            background: white;
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            border-radius: 5px;
+            line-height: 24px;
+            color: #333;
+        }
+        .legend i {
+            width: 12px;
+            height: 12px;
+            float: left;
+            margin-right: 8px;
+            margin-top: 6px;
+            border-radius: 50%;
+            border: 1px solid #fff;
         }
     </style>
 </head>
@@ -29,113 +44,89 @@
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
-        attribution: '© <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        attribution: '© OpenStreetMap'
     }).addTo(map);
 
-    // 2. Create Layer Groups
+    // 2. Create Legend
+    var legend = L.control({position: 'bottomright'});
+    legend.onAdd = function (map) {
+        var div = L.DomUtil.create('div', 'legend');
+        div.innerHTML += '<strong>Legend</strong><br>';
+        div.innerHTML += '<i style="background: blue"></i> b5122ba1...<br>';
+        div.innerHTML += '<i style="background: green"></i> 8a516fde...<br>';
+        div.innerHTML += '<i style="background: red"></i> fdcb6d15...<br>';
+        div.innerHTML += '<i style="background: #666"></i> Other';
+        return div;
+    };
+    legend.addTo(map);
+
+    // 3. Layer Groups
     var markerGroup = L.featureGroup().addTo(map);
     var heatLayer = null; 
 
-    // 3. Main Function
+    // 4. Main Function
     function renderMap() {
-        // --- Reset Layers ---
         markerGroup.clearLayers();
-        if (heatLayer) {
-            map.removeLayer(heatLayer);
-        }
+        if (heatLayer) { map.removeLayer(heatLayer); }
 
-        // --- Get Data from Hash (#) ---
         var hash = window.location.hash.substring(1); 
         var params = new URLSearchParams(hash);
         var locationsParam = params.get('locations');
-
         var locations = [];
 
         if (locationsParam) {
             try {
                 locationsParam = decodeURIComponent(locationsParam);
                 var rawPoints = locationsParam.split('|');
-                
                 locations = rawPoints.map(locString => {
                     if (!locString || locString.trim() === "") return null;
-
                     const parts = locString.split(',');
                     if (parts.length < 2) return null;
-
                     const lat = parseFloat(parts[0]);
                     const lon = parseFloat(parts[1]);
-                    
-                    const id = parts.slice(2).join(',') || `Location_(${lat.toFixed(4)})`;
-
-                    if (isNaN(lat) || isNaN(lon)) return null;
-                    return [lat, lon, id]; 
-
+                    const id = parts.slice(2).join(',') || "Unknown";
+                    return (isNaN(lat) || isNaN(lon)) ? null : [lat, lon, id]; 
                 }).filter(loc => loc !== null); 
-
-            } catch (e) {
-                console.error("Error parsing locations:", e);
-            }
+            } catch (e) { console.error("Error parsing locations:", e); }
         }
 
         if (locations.length === 0) return;
 
-        // --- Render Heatmap ---
+        // Render Heatmap
         const heatPoints = locations.map(loc => [loc[0], loc[1], 1.0]);
-        
-        heatLayer = L.heatLayer(heatPoints, {
-            radius: 25,
-            blur: 10,
-            minOpacity: 0.3,
-            maxZoom: 18
-        }).addTo(map);
+        heatLayer = L.heatLayer(heatPoints, { radius: 25, blur: 15, minOpacity: 0.3 }).addTo(map);
 
-        // --- Render Markers & Interactions ---
-        var baseUrl = "https://ph-pov.eu-3.celonis.cloud/package-manager/ui/studio/ui/spaces/17861590-4c7f-45b3-b6e7-91d480bbaa96/packages/b9067f27-7266-44c0-b11c-a1d1d240a113/nodes/2c5115be-c441-4517-ad34-a3b76742cfec?filters=";
-
+        // Render Markers
         locations.forEach(function(loc) {
             var lat = loc[0];
             var lon = loc[1];
-            var id = loc[2];
-            var cleanId = id.trim(); // Remove extra spaces
+            var cleanId = loc[2].trim();
 
-            // --- CHECK: Does ID start with V- ? ---
-            var isActionable = cleanId.startsWith("V-");
+            // ID Specific Colors
+            var pointColor = "#666666"; 
+            if (cleanId === "b5122ba1-baa8-4a0d-9818-60c1e33b7d3c") {
+                pointColor = "blue";
+            } else if (cleanId === "8a516fde-f7db-484a-9e1b-930e8a0d26b1") {
+                pointColor = "green";
+            } else if (cleanId === "fdcb6d15-d523-40c9-bd58-24887e69b63d") {
+                pointColor = "red";
+            }
 
-            var filterString = `FILTER "o_custom_Vorgang"."ID" IN ('${cleanId}');`;
-            var encodedFilter = btoa(filterString);
-            var finalUrl = baseUrl + encodedFilter;
-
-            // Define Marker Options
-            var markerOptions = {
-                radius: 6,
-                fillColor: "#0000FF",
+            var marker = L.circleMarker([lat, lon], {
+                radius: 8,
+                fillColor: pointColor,
                 color: "#FFFFFF",
                 weight: 2,
                 opacity: 1,
-                fillOpacity: 0.7
-            };
+                fillOpacity: 0.8
+            });
 
-            // If NOT actionable, add CSS class to change cursor to arrow
-            if (!isActionable) {
-                markerOptions.className = 'non-clickable-cursor';
-            }
-
-            // Create Marker
-            var marker = L.circleMarker([lat, lon], markerOptions);
-
+            // Re-enable tooltip on hover
             marker.bindTooltip(cleanId);
-            
-            // --- ONLY ADD CLICK EVENT IF ACTIONABLE ---
-            if (isActionable) {
-                marker.on('click', function() {
-                    window.open(finalUrl, '_blank');
-                });
-            }
-            
             marker.addTo(markerGroup);
         });
 
-        // --- Intelligent Zoom ---
+        // Zoom logic
         if (locations.length === 1) {
             map.setView([locations[0][0], locations[0][1]], 14);
         } else {
@@ -143,10 +134,8 @@
         }
     }
 
-    // 4. Run immediately and Listen
     renderMap();
     window.addEventListener("hashchange", renderMap);
-
 </script>
 
 </body>
