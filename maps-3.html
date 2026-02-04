@@ -11,17 +11,24 @@
     
     <style>
         #map { height: 100vh; width: 100%; }
-        body { padding: 0; margin: 0; font-family: sans-serif; }
+        body { padding: 0; margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
 
         /* Legend Styling */
         .legend {
-            padding: 10px;
+            padding: 12px;
             background: white;
-            background: rgba(255, 255, 255, 0.9);
+            background: rgba(255, 255, 255, 0.95);
             box-shadow: 0 0 15px rgba(0,0,0,0.2);
-            border-radius: 5px;
+            border-radius: 8px;
             line-height: 24px;
             color: #333;
+            font-size: 13px;
+        }
+        .legend strong {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+            border-bottom: 1px solid #ddd;
         }
         .legend i {
             width: 12px;
@@ -51,11 +58,11 @@
     var legend = L.control({position: 'bottomright'});
     legend.onAdd = function (map) {
         var div = L.DomUtil.create('div', 'legend');
-        div.innerHTML += '<strong>GeräteIDs</strong><br>';
+        div.innerHTML += '<strong>Geräte-IDs:</strong>';
         div.innerHTML += '<i style="background: blue"></i> b5122ba1...<br>';
         div.innerHTML += '<i style="background: green"></i> 8a516fde...<br>';
         div.innerHTML += '<i style="background: red"></i> fdcb6d15...<br>';
-        div.innerHTML += '<i style="background: #666"></i> Other';
+        div.innerHTML += '<i style="background: #666"></i> Andere';
         return div;
     };
     legend.addTo(map);
@@ -92,17 +99,17 @@
 
         if (locations.length === 0) return;
 
-        // Render Heatmap
+        // Render Heatmap (Layer 1)
         const heatPoints = locations.map(loc => [loc[0], loc[1], 1.0]);
         heatLayer = L.heatLayer(heatPoints, { radius: 25, blur: 15, minOpacity: 0.3 }).addTo(map);
 
-        // Render Markers
+        // Render Markers (Layer 2)
         locations.forEach(function(loc) {
             var lat = loc[0];
             var lon = loc[1];
             var cleanId = loc[2].trim();
 
-            // ID Specific Colors
+            // ID Specific Color Logic
             var pointColor = "#666666"; 
             if (cleanId === "b5122ba1-baa8-4a0d-9818-60c1e33b7d3c") {
                 pointColor = "blue";
@@ -118,15 +125,19 @@
                 color: "#FFFFFF",
                 weight: 2,
                 opacity: 1,
-                fillOpacity: 0.8
+                fillOpacity: 0.85
             });
 
-            // Re-enable tooltip on hover
-            marker.bindTooltip(cleanId);
+            // Tooltip for ID on hover
+            marker.bindTooltip(cleanId, {
+                direction: 'top',
+                offset: [0, -5]
+            });
+            
             marker.addTo(markerGroup);
         });
 
-        // Zoom logic
+        // Smart Zoom
         if (locations.length === 1) {
             map.setView([locations[0][0], locations[0][1]], 14);
         } else {
